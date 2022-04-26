@@ -1,3 +1,4 @@
+#include "pch.h"
 #include "TransformAsync.h"
 #include <CommCtrl.h>
 long long g_now; // The time since the last call to FrameThreadProc
