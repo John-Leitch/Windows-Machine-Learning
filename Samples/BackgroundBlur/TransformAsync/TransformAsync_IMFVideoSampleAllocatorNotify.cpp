@@ -7,15 +7,16 @@ DWORD __stdcall FrameThreadProc(LPVOID lpParam)
 {
     DWORD waitResult;
     // Get the handle from the lpParam pointer
-    //HANDLE event = lpParam;
-    com_ptr<IUnknown> unk;
+    HANDLE event = lpParam;
+    /*com_ptr<IUnknown> unk;
     com_ptr<TransformAsync> transform;
     unk.attach((IUnknown*)lpParam);
-    transform = unk.as<TransformAsync>();
+    transform = unk.as<TransformAsync>();*/
 
     //OutputDebugString(L"Thread %d waiting for Frame event...");
     waitResult = WaitForSingleObject(
-        transform->m_fenceEvent.get(),         // event handle
+        event,
+        //transform->m_fenceEvent.get(),         // event handle
         INFINITE);      // indefinite wait
 
 
@@ -36,7 +37,7 @@ DWORD __stdcall FrameThreadProc(LPVOID lpParam)
             OutputDebugString(L"\n");
 
             auto message = std::wstring(L"Frame Rate: ") + std::to_wstring(fps) + L" FPS";
-            transform->WriteFrameRate(message.c_str());
+            //transform->WriteFrameRate(message.c_str());
             //MainWindow::_SetStatusText(message.c_str());
             //TRACE(("Responded to event and it's been %d miliseconds", timePassed));
             // TODO: Call Set status text with new framerate
@@ -50,40 +51,78 @@ DWORD __stdcall FrameThreadProc(LPVOID lpParam)
     return 1;
 }
 
-HRESULT TransformAsync::NotifyRelease()
+STDMETHODIMP TransformAsync::TransformAsyncCB::QueryInterface(REFIID riid, void** ppv)
 {
-    const UINT64 currFenceValue = m_fenceValue;
-    auto fenceComplete = m_fence->GetCompletedValue();
+    static const QITAB qit[] =
+    {
+        QITABENT(TransformAsyncCB, IMFVideoSampleAllocatorNotify),
+        { 0 }
+    };
+    return QISearch(this, qit, riid, ppv);
+}
+
+STDMETHODIMP_(ULONG) TransformAsync::TransformAsyncCB::AddRef()
+{
+    return InterlockedIncrement(&m_ref);
+}
+
+STDMETHODIMP_(ULONG) TransformAsync::TransformAsyncCB::Release()
+{
+    LONG cRef = InterlockedDecrement(&m_ref);
+    if (cRef == 0)
+    {
+        delete this;
+    }
+    return cRef;
+}
+
+// Callback method to receive events from the capture engine.
+STDMETHODIMP TransformAsync::TransformAsyncCB::NotifyRelease()
+{
+    RETURN_IF_NULL_ALLOC(m_transform);
+
+    const UINT64 currFenceValue = m_transform->m_fenceValue;
+    auto fenceComplete = m_transform->m_fence->GetCompletedValue();
     DWORD dwThreadID;
 
     // Fail fast if context doesn't exist anymore. 
-    if (m_context == nullptr)
+    if (m_transform->m_context == nullptr)
     {
         return S_OK;
     }
 
-    // Scheduel a Signal command in the queue
-    RETURN_IF_FAILED(m_context->Signal(m_fence.get(), currFenceValue));
+    // SChedule a Signal command in the queue
+    RETURN_IF_FAILED(m_transform->m_context->Signal(m_transform->m_fence.get(), currFenceValue));
 
     if (currFenceValue % FRAME_RATE_UPDATE == 0)
     {
 
-        m_fence->SetEventOnCompletion(currFenceValue, m_fenceEvent.get()); // Raise FenceEvent when done
-        m_frameThread.reset(CreateThread(NULL, 0, FrameThreadProc, this, 0, &dwThreadID));
+        m_transform->m_fence->SetEventOnCompletion(currFenceValue, m_fenceEvent.get()); // Raise FenceEvent when done
+        m_transform->m_frameThread = (CreateThread(NULL, 0, FrameThreadProc, m_fenceEvent.get(), 0, &dwThreadID));
     }
 
-    m_fenceValue = currFenceValue + 1;
+    m_transform->m_fenceValue = currFenceValue + 1;
     return S_OK;
 }
 
+void TransformAsync::TransformAsyncCB::StartThread()
+{
+    // Create event and thread for framerate
+    m_fenceEvent.reset(CreateEvent(NULL,               // Security attributes
+        FALSE,              // Reset token to false means system will auto-reset event object
+        FALSE,              // Initial state is nonsignaled
+        TEXT("FrameEvent")));  // Event object name
+}
+
+
 void TransformAsync::SetFrameRateWnd(HWND hwnd)
 {
-    m_frameWnd = hwnd;
+    m_callback->m_hwnd = hwnd;
 }
 
 void TransformAsync::WriteFrameRate(const WCHAR* frameRate)
 {
-    if (m_frameWnd) {
+    /*if (m_frameWnd) {
         SendMessage(m_frameWnd, SB_SETTEXT, (WPARAM)(0), (LPARAM)frameRate);
-    }
+    }*/
 }

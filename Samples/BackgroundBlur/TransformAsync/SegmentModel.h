@@ -64,7 +64,7 @@ protected:
 	// Cache input frames into a shareable d3d-backed VideoFrame
 	void SetVideoFrames(VideoFrame inVideoFrame, VideoFrame outVideoFrame) 
 	{
-		if (true || !m_videoFramesSet)
+		if (m_useGPU)
 		{
 			auto device = m_session.Device().Direct3D11Device();
 			auto inDesc = inVideoFrame.Direct3DSurface().Description();

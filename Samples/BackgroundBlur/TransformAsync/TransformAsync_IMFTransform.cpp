@@ -7,13 +7,13 @@
 #include <dxgi1_2.h>
 #include <dxgi1_3.h>
 
-interface DECLSPEC_UUID("9f251514-9d4d-4902-9d60-18988ab7d4b5") DECLSPEC_NOVTABLE
-    IDXGraphicsAnalysis : public IUnknown
-{
-    STDMETHOD_(void, BeginCapture)() PURE;
-    STDMETHOD_(void, EndCapture)() PURE;
-};
-IDXGraphicsAnalysis* graphicsAnalysis;
+//interface DECLSPEC_UUID("9f251514-9d4d-4902-9d60-18988ab7d4b5") DECLSPEC_NOVTABLE
+//    IDXGraphicsAnalysis : public IUnknown
+//{
+//    STDMETHOD_(void, BeginCapture)() PURE;
+//    STDMETHOD_(void, EndCapture)() PURE;
+//};
+//IDXGraphicsAnalysis* graphicsAnalysis;
 
 //-------------------------------------------------------------------
 // Name: GetStreamLimits
@@ -655,7 +655,6 @@ HRESULT TransformAsync::ProcessMessage(
     break;
     case MFT_MESSAGE_NOTIFY_BEGIN_STREAMING:
     {
-        HRESULT getAnalysis = DXGIGetDebugInterface1(0, __uuidof(graphicsAnalysis), reinterpret_cast<void**>(&graphicsAnalysis));
         RETURN_IF_FAILED(SetupAlloc());
         break;
     }

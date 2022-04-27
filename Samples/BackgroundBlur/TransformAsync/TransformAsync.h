@@ -59,11 +59,35 @@ class TRANSFORMASYNC_API TransformAsync:
     public IMFShutdown,                 // Shuts down the MFT event queue when signalled from client. 
     public IMFMediaEventGenerator,      // Generates NeedInput and HasOutput events for the client to respond to. 
     public IMFAsyncCallback,            // The callback interface to notify when an async method completes. 
-    public IUnknown,
-    public IMFVideoSampleAllocatorNotify // Callback interface to notify when an IMFSample is freed back to allocator. 
+    public IUnknown
 {
 public: 
     static HRESULT CreateInstance(IMFTransform** ppMFT) noexcept;
+
+    // The VideoSampleAllocator callback object
+    class TransformAsyncCB : IMFVideoSampleAllocatorNotify 
+    {
+        long m_ref;
+        wil::unique_handle m_fenceEvent;      // Handle to the fence complete event
+
+    public:
+        TransformAsyncCB() : m_ref(1), m_hwnd(NULL), m_transform(NULL){}
+
+        // IUnknown
+        STDMETHODIMP QueryInterface(REFIID riid, void** ppv);
+        STDMETHODIMP_(ULONG) AddRef();
+        STDMETHODIMP_(ULONG) Release();
+
+        STDMETHODIMP NotifyRelease();
+        //void SetHwnd(HWND hwnd);
+        HWND m_hwnd;
+
+        void StartThread();
+
+        TransformAsync* m_transform;
+    };
+
+    com_ptr<TransformAsyncCB> m_callback;
 
 #pragma region IUnknown
     // IUnknown
@@ -246,13 +270,11 @@ public:
         LONGLONG hnsDuration,
         LONGLONG hnsTime,
         UINT64 pun64MarkerID);
+    void SetFrameRateWnd(HWND hwnd);
 
     void WriteFrameRate(const WCHAR* frameRate);
-    void SetFrameRateWnd(HWND hwnd);
-    wil::unique_handle m_fenceEvent;      // Handle to the fence complete event
 
 protected:
-
     // Destructor is private. The object deletes itself when the reference count is zero.
     ~TransformAsync();
 
@@ -342,7 +364,7 @@ protected:
 
     // D3D fields
     com_ptr<IMFDXGIDeviceManager>       m_deviceManager;  // Device manager, shared with the video renderer. 
-    wil::unique_handle                  m_deviceHandle;    // Handle to the current device
+    wil::unique_handle                  m_deviceHandle;   // Handle to the current device
     // Immediate device context
     com_ptr<ID3D11DeviceContext4>       m_context;
     com_ptr<ID3D11Device5>              m_device;
@@ -351,8 +373,8 @@ protected:
     // Frame rate synch objects
     com_ptr<ID3D11Fence>                m_fence;
     UINT64 m_fenceValue;
-    wil::unique_handle                  m_frameThread;
-    HWND                                m_frameWnd;
+    HANDLE                  m_frameThread;
+    //HWND                                m_frameWnd;
 
     // Model Inference fields
     int m_numThreads = std::thread::hardware_concurrency(); // Number of threads running inference in parallel.
@@ -360,7 +382,3 @@ protected:
     int m_modelIndex = 0;
 
 };
-
-extern TRANSFORMASYNC_API int nTransformAsync;
-
-TRANSFORMASYNC_API int fnTransformAsync(void);

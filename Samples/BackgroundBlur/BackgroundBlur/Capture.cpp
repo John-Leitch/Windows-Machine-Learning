@@ -148,7 +148,6 @@ HRESULT CreateD3DManager()
 // Use function guard and don't co-mix exception and error handling in a single function
 HRESULT CaptureManager::InitializeCaptureManager(HWND hwndPreview, HWND hwndStatus, IUnknown* pUnk) noexcept try
 {
-    HRESULT                         hr = S_OK;
     com_ptr<IMFAttributes>          attributes;
     com_ptr<IMFCaptureEngineClassFactory>   factory;
 
@@ -178,6 +177,8 @@ HRESULT CaptureManager::InitializeCaptureManager(HWND hwndPreview, HWND hwndStat
     THROW_IF_FAILED(factory->CreateInstance(CLSID_MFCaptureEngine, IID_PPV_ARGS(m_engine.put())));
 
     THROW_IF_FAILED(m_engine->Initialize(m_callback.get(), attributes.get(), NULL, pUnk));
+
+    return S_OK;
 }
 CATCH_RETURN();
 

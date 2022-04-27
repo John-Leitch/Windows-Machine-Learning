@@ -58,8 +58,12 @@ TransformAsync::~TransformAsync()
 
     m_inputType.detach();
     m_outputType.detach();
-   
-    CloseHandle(m_fenceEvent.get());
+
+    m_deviceHandle.reset();
+    if (m_frameThread) {
+        WaitForSingleObject(m_frameThread, INFINITE);
+        CloseHandle(m_frameThread);
+    }
 
     if (m_eventQueue)
     {
@@ -105,10 +109,10 @@ HRESULT TransformAsync::QueryInterface(REFIID iid, void** ppv)
     {
         *ppv = static_cast<IMFAsyncCallback*>(this);
     }
-    else if (iid == IID_IMFVideoSampleAllocatorNotify)
-    {
-        *ppv = static_cast<IMFVideoSampleAllocatorNotify*>(this);
-    }
+    //else if (iid == IID_IMFVideoSampleAllocatorNotify)
+    //{
+    //    *ppv = static_cast<IMFVideoSampleAllocatorNotify*>(this);
+    //}
     else if (iid == __uuidof(TransformAsync))
     {
         *ppv = (TransformAsync*)this;
@@ -302,13 +306,8 @@ HRESULT TransformAsync::OnSetD3DManager(ULONG_PTR ulParam)
             {
                 RETURN_IF_FAILED(m_outputSampleAllocator->SetDirectXManager(unk.get()));
             }
+            m_callback->StartThread();
 
-            // Create event and thread for framerate
-            m_fenceEvent.reset(CreateEvent(NULL,               // Security attributes
-                FALSE,              // Reset token to false means system will auto-reset event object
-                FALSE,              // Initial state is nonsignaled
-                TEXT("FrameEvent")));  // Event object name
-            
             DWORD dwThreadID;
         }
     }
@@ -382,11 +381,11 @@ HRESULT TransformAsync::SetupAlloc()
             }
 
             // TODO: This should prob raise an error if it doesn't work
-            RETURN_IF_FAILED(m_outputSampleAllocator->InitializeSampleAllocatorEx(2, m_numThreads, m_allocatorAttributes.get(), m_outputType.get()));
+            RETURN_IF_FAILED(m_outputSampleAllocator->InitializeSampleAllocatorEx(2, 5, m_allocatorAttributes.get(), m_outputType.get()));
 
             // Set up IMFVideoSampleAllocatorCallback
             m_outputSampleCallback = m_outputSampleAllocator.try_as<IMFVideoSampleAllocatorCallback>();
-            m_outputSampleCallback->SetCallback(this); // TODO: Will setCallback QI for Notify ? 
+            m_outputSampleCallback->SetCallback(m_callback.as<IMFVideoSampleAllocatorNotify>().get()); // TODO: Will setCallback QI for Notify ? 
         }
         m_allocatorInitialized = true;
 
@@ -638,11 +637,12 @@ HRESULT TransformAsync::InitializeTransform(void)
     ** MF Provides a standard implementation
     **********************************/
     RETURN_IF_FAILED(MFCreateEventQueue(m_eventQueue.put()));
-
     RETURN_IF_FAILED(CSampleQueue::Create(&m_inputSampleQueue));
-
     RETURN_IF_FAILED(CSampleQueue::Create(&m_outputSampleQueue));
 
+    m_callback.attach(new TransformAsyncCB());
+    m_callback->m_transform = this;
+    
     // Set up circular queue of StreamModelBases
     for (int i = 0; i < m_numThreads; i++) {
         // TODO: Have a dialogue to select which model to select for real-time inference. 

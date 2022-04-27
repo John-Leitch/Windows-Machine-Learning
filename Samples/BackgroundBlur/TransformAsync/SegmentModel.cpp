@@ -55,6 +55,10 @@ void StyleTransfer::Run(IDirect3DSurface src, IDirect3DSurface dest)
 	VideoFrame outVideoFrame = VideoFrame::CreateWithDirect3D11Surface(dest);
 	SetVideoFrames(inVideoFrame, outVideoFrame);
 
+	// Shape validation
+	assert((UINT32)m_inputVideoFrame.Direct3DSurface().Description().Height == m_imageHeightInPixels);
+	assert((UINT32)m_inputVideoFrame.Direct3DSurface().Description().Width == m_imageWidthInPixels);
+
 	hstring inputName = m_session.Model().InputFeatures().GetAt(0).Name();
 	m_binding.Bind(inputName, m_inputVideoFrame);
 	hstring outputName = m_session.Model().OutputFeatures().GetAt(0).Name();
@@ -66,7 +70,8 @@ void StyleTransfer::Run(IDirect3DSurface src, IDirect3DSurface dest)
 	auto results = m_session.Evaluate(m_binding, L"");
 
 	m_outputVideoFrame.CopyToAsync(outVideoFrame).get();
-
+	m_inputVideoFrame.Close();
+	m_outputVideoFrame.Close();
 	m_syncStarted = FALSE;
 }
 
@@ -137,6 +142,9 @@ void BackgroundBlur::Run(IDirect3DSurface src, IDirect3DSurface dest)
 	m_binding.Bind(outputName, m_outputVideoFrame);
 	auto results = m_session.Evaluate(m_binding, L"");
 	m_outputVideoFrame.CopyToAsync(outVideoFrame).get();
+
+	m_inputVideoFrame.Close();
+	m_outputVideoFrame.Close();
 	m_syncStarted = FALSE;
 }
 
